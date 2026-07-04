@@ -1,6 +1,6 @@
 apply plugin: "java"
 
-version = '0.7.0'
+version = '0.6.0'
 
 sourceSets.main.java.srcDirs = ["src"]
 
@@ -88,6 +88,7 @@ jar{
 
     from(projectDir){
         include "mod.hjson"
+        include "icon.png"
     }
 
     from("assets/"){

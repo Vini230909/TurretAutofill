@@ -1,27 +1,29 @@
 #the mod name as displayed in-game
-displayName: "Vini Client"
+displayName: "Turret Auto Fill"
 
-#the internal name of your mod
-name: "vini-client"
+#the internal name of the mod
+name: "turret-auto-fill"
 
-#your name
-author: "Vini2309"
+#author
+author: "Vini230909"
+
+#github repository, used for in-game update checks and reinstalls
+repo: "Vini230909/Turretautofill"
 
 #the fully qualified main class of the mod
-main: "vini.client.ViniClient"
+main: "vini.turretautofill.TurretAutoFill"
 
 #the mod description as seen in the mod dialog
-description: "Client-side Mindustry tools by Vini. Includes Turret Fill and smart bridge paths."
+description: "Automatically fills nearby item turrets with the best ammo from your carried items or the closest core. Toggle with F4; configure ammo priorities in Settings > Turret Auto Fill."
 
 #the mod version
-version: 0.7.0
+version: 0.6.0
 
 #the minimum game build required to run this mod
 minGameVersion: 154
 
+#client-side only: not required on servers, so you can join any server with this installed
+hidden: true
+
 #this is a java mod
 java: true
-githubRelease: true
-repo: "Vini230909/Vini-Client"
-hidden: true
-legacyCompatible: true

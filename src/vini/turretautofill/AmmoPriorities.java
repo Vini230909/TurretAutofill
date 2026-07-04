@@ -1,4 +1,4 @@
-package vini.client.turretfill;
+package vini.turretautofill;
 
 import arc.Core;
 import arc.graphics.Color;
@@ -40,7 +40,16 @@ public class AmmoPriorities {
     private static Table dragGhost;
 
     public static void addSettingsCategory() {
-        Vars.ui.settings.addCategory("Vini Client", Icon.settings, table -> {
+        Vars.ui.settings.addCategory("Turret Auto Fill", Icon.settings, table -> {
+            table.sliderPref(
+                TurretFillFeature.RATE_LIMIT_KEY,
+                TurretFillFeature.RATE_LIMIT_DEFAULT,
+                TurretFillFeature.RATE_LIMIT_MIN,
+                TurretFillFeature.RATE_LIMIT_MAX,
+                1,
+                i -> i + " / 6s"
+            );
+
             table.pref(new SettingsTable.Setting("ammo-priority-editor") {
                 @Override
                 public void add(SettingsTable table) {

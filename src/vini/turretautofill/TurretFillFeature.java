@@ -1,4 +1,4 @@
-package vini.client.turretfill;
+package vini.turretautofill;
 
 import arc.Core;
 import arc.Events;
@@ -17,9 +17,10 @@ import mindustry.gen.Tex;
 import mindustry.gen.Unit;
 import mindustry.type.Item;
 import mindustry.world.blocks.defense.turrets.ItemTurret;
-import vini.client.ViniFeature;
 
-public class TurretFillFeature implements ViniFeature {
+import java.util.ArrayDeque;
+
+public class TurretFillFeature {
     private static final boolean DEBUG = false;
 
     private static final float TRANSFER_DELAY = 10f;
@@ -33,6 +34,13 @@ public class TurretFillFeature implements ViniFeature {
 
     private static final int MIN_TRANSFER = 1;
     private static final int MIN_CORE_ITEMS = 1;
+
+    //vanilla servers reject players that exceed 25 interactions per 6 seconds
+    public static final String RATE_LIMIT_KEY = "vini-turretfill-actions-per-window";
+    public static final int RATE_LIMIT_DEFAULT = 15;
+    public static final int RATE_LIMIT_MIN = 3;
+    public static final int RATE_LIMIT_MAX = 25;
+    private static final long RATE_WINDOW_MS = 6000;
 
     private boolean enabled = false;
 
@@ -57,6 +65,14 @@ public class TurretFillFeature implements ViniFeature {
     private Item originalItem = null;
     private boolean restoringOriginalItem = false;
 
+    //last item the player actually held; survives manual deposits into the core or air
+    //so the next core session can hand it back
+    private Item rememberedItem = null;
+    private Item lastFrameHeldItem = null;
+    private int lastFrameHeldAmount = 0;
+
+    private final ArrayDeque<Long> actionTimes = new ArrayDeque<>();
+
     private int lastTurretCount = 0;
     private int lastCompatibleCount = 0;
     private int lastFilledCount = 0;
@@ -72,7 +88,6 @@ public class TurretFillFeature implements ViniFeature {
     private Table debugTable;
     private Label debugLabel;
 
-    @Override
     public void init() {
         TurretFillKeybinds.load();
 
@@ -113,6 +128,10 @@ public class TurretFillFeature implements ViniFeature {
         originalItem = null;
         restoringOriginalItem = false;
 
+        rememberedItem = null;
+        lastFrameHeldItem = null;
+        lastFrameHeldAmount = 0;
+
         lastFilledCount = 0;
         lastPickupCount = 0;
         lastDropCount = 0;
@@ -144,6 +163,8 @@ public class TurretFillFeature implements ViniFeature {
             return;
         }
 
+        trackHeldItem(unit);
+
         Building core = getCoreInRange();
         lastCoreInRange = core != null;
 
@@ -161,7 +182,52 @@ public class TurretFillFeature implements ViniFeature {
         }
     }
 
+    private void trackHeldItem(Unit unit) {
+        Item current = unit.item();
+        int amount = unit.stack.amount;
+
+        boolean modAction = waitingForTransfer || waitingForPickup || waitingForCoreDrop;
+
+        //the held stack vanished without the mod having sent a transfer: the player
+        //deposited or dropped it manually, so remember it for the next core session
+        if(!modAction && !coreSessionActive
+            && lastFrameHeldItem != null && lastFrameHeldAmount > 0
+            && (current == null || amount <= 0 || current != lastFrameHeldItem)){
+            rememberedItem = lastFrameHeldItem;
+        }
+
+        lastFrameHeldItem = current;
+        lastFrameHeldAmount = amount;
+    }
+
+    private boolean tryAction() {
+        //only multiplayer clients are subject to the server action rate limit
+        if(!Vars.net.client()){
+            return true;
+        }
+
+        long now = Time.millis();
+
+        while(!actionTimes.isEmpty() && now - actionTimes.peekFirst() > RATE_WINDOW_MS){
+            actionTimes.pollFirst();
+        }
+
+        int limit = Math.max(1, Core.settings.getInt(RATE_LIMIT_KEY, RATE_LIMIT_DEFAULT));
+
+        if(actionTimes.size() >= limit){
+            return false;
+        }
+
+        actionTimes.add(now);
+        return true;
+    }
+
     private void resetCoreSessionOnly() {
+        //keep the original item in mind if the session got cut off while it was in the core
+        if(originalItem != null){
+            rememberedItem = originalItem;
+        }
+
         coreSessionActive = false;
         coreSessionDone = false;
         originalItem = null;
@@ -184,7 +250,17 @@ public class TurretFillFeature implements ViniFeature {
         }
 
         if(!coreSessionActive){
-            originalItem = unit.item();
+            Item held = unit.item();
+
+            //empty hands can mean the item was deposited or dropped manually;
+            //fall back to the remembered item so it still gets restored
+            if(held != null && unit.stack.amount > 0){
+                originalItem = held;
+                rememberedItem = held;
+            }else{
+                originalItem = rememberedItem;
+            }
+
             lastOriginalItem = originalItem == null ? "None" : originalItem.localizedName;
             coreSessionActive = true;
             restoringOriginalItem = false;
@@ -335,6 +411,10 @@ public class TurretFillFeature implements ViniFeature {
             return;
         }
 
+        if(!tryAction()){
+            return;
+        }
+
         dropTimer = 0f;
 
         Call.transferInventory(Vars.player, core);
@@ -353,6 +433,10 @@ public class TurretFillFeature implements ViniFeature {
         pickupTimer += Time.delta;
 
         if(pickupTimer < PICKUP_DELAY){
+            return;
+        }
+
+        if(!tryAction()){
             return;
         }
 
@@ -438,6 +522,10 @@ public class TurretFillFeature implements ViniFeature {
         }
 
         if(transferTimer < TRANSFER_DELAY){
+            return;
+        }
+
+        if(!tryAction()){
             return;
         }
 
@@ -580,6 +668,7 @@ public class TurretFillFeature implements ViniFeature {
             "Pickup: [lightgray]" + lastPickupItem + " x" + lastPickupCount + "\n" +
             "Drops: [lightgray]" + lastDropCount + "\n" +
             "Original: [lightgray]" + lastOriginalItem + "\n" +
+            "Remembered: [lightgray]" + (rememberedItem == null ? "None" : rememberedItem.localizedName) + "\n" +
             "Held: [lightgray]" + held + " x" + amount
         );
 

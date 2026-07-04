@@ -1,4 +1,4 @@
-package vini.client.turretfill;
+package vini.turretautofill;
 
 import arc.input.KeyBind;
 import arc.input.KeyCode;
@@ -7,7 +7,7 @@ public class TurretFillKeybinds {
     public static final KeyBind toggle = KeyBind.add(
         "toggle-turret-auto-fill",
         KeyCode.f4,
-        "Vini Client"
+        "Turret Auto Fill"
     );
 
     private TurretFillKeybinds() {
